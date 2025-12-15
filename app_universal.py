@@ -1,5 +1,4 @@
 import ssl
-# แก้ปัญหา Certificate สำหรับเครื่องบางเครื่อง
 ssl._create_default_https_context = ssl._create_unverified_context
 
 import streamlit as st
@@ -10,8 +9,8 @@ from streamlit_autorefresh import st_autorefresh
 # ==========================================
 # ⚙️ ส่วนตั้งค่า (แก้ไขข้อความตรงนี้)
 # ==========================================
-LOGO_FILENAME = "logo.png"  # ชื่อไฟล์โลโก้ (ต้องวางคู่กับไฟล์ app.py)
-HOSPITAL_NAME = "โรงพยาบาลราชวิถี"
+LOGO_FILENAME = "logo.png"
+HOSPITAL_NAME = "โรงพยาบาลราชวิถี (Rajavithi Hospital)"
 SYSTEM_NAME = "Smart Analytics Dashboard : งานถ่ายทอดการพยาบาล"
 DEV_NAME = "งานถ่ายทอดการพยาบาล"
 
@@ -22,31 +21,26 @@ st.set_page_config(page_title=SYSTEM_NAME, page_icon="🏥", layout="wide")
 st_autorefresh(interval=30000, key="auto_refresh")
 
 # ==========================================
-# 2. ส่วนหัว (HEADER) - แบบ Hardcode
+# 2. ส่วนหัว (HEADER)
 # ==========================================
 c_logo, c_title = st.columns([1, 6])
-
 with c_logo:
     try:
         st.image(LOGO_FILENAME, width=110)
     except:
-        # ถ้าหาไฟล์รูปไม่เจอ ให้โชว์ไอคอนแทน
         st.markdown("# 🏥")
-
 with c_title:
     st.title(HOSPITAL_NAME)
     st.markdown(f"### {SYSTEM_NAME}")
-
 st.markdown("---")
 
 # ==========================================
-# 3. ส่วนนำเข้าข้อมูล (Data Source)
+# 3. นำเข้าข้อมูล
 # ==========================================
 st.subheader("📁 1. แหล่งข้อมูล")
 tab_excel, tab_gsheet = st.tabs(["📂 อัปโหลด Excel", "🔗 ลิงก์ Google Sheets"])
 df = None 
 
-# TAB 1: Excel
 with tab_excel:
     uploaded_file = st.file_uploader("เลือกไฟล์ Excel (.xlsx)", type=["xlsx", "xls"])
     if uploaded_file is not None:
@@ -56,7 +50,6 @@ with tab_excel:
         except Exception as e:
             st.error(f"❌ อ่านไฟล์ไม่ได้: {e}")
 
-# TAB 2: Google Sheets
 with tab_gsheet:
     default_url = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?usp=sharing"
     gsheet_url = st.text_input("วางลิงก์ Google Sheet:", value=default_url)
@@ -82,18 +75,15 @@ with tab_gsheet:
             st.success("✅ เชื่อมต่อ Google Sheet สำเร็จ")
 
 # ==========================================
-# 4. เริ่มประมวลผล (เมื่อมีข้อมูล)
+# 4. ประมวลผลและแสดงผล
 # ==========================================
 if df is not None:
     all_cols = df.columns.tolist()
     num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
     cat_cols = df.select_dtypes(include=['object']).columns.tolist()
-    time_keywords = ['date', 'time', 'year', 'month', 'day', 'วัน', 'เดือน', 'ปี']
-    date_col = next((col for col in cat_cols if any(k in col.lower() for k in time_keywords)), None)
-
-    # --- ส่วนกรองข้อมูล (Filter) ---
+    
+    # --- ส่วนกรองข้อมูล ---
     st.markdown("#### 🔍 2. กรองข้อมูล (Filter)")
-    # ใช้ style container เพื่อความสวยงาม
     with st.container():
         c1, c2, c3 = st.columns([1, 1, 2])
         with c1: filter_main = st.selectbox("เลือกหัวข้อหลัก:", ["(แสดงทั้งหมด)"] + cat_cols)
@@ -105,7 +95,6 @@ if df is not None:
             else: st.info("แสดงข้อมูลทั้งหมด")
         with c3: search_txt = st.text_input("ค้นหาเพิ่มเติม:", placeholder="พิมพ์คำค้นหา...")
 
-    # Logic การกรอง
     df_filtered = df.copy()
     if filter_main != "(แสดงทั้งหมด)" and selected_sub:
         df_filtered = df_filtered[df_filtered[filter_main].isin(selected_sub)]
@@ -120,7 +109,7 @@ if df is not None:
     st.subheader("📈 3. สรุปผลภาพรวม")
 
     if not df_filtered.empty:
-        # เลือก KPI (ใส่ไว้ใน Expander เพื่อไม่ให้รก)
+        # KPI Cards
         with st.expander("⚙️ เลือกหัวข้อ KPI Card", expanded=True):
             selected_kpi_cols = st.multiselect("เลือกข้อมูลที่จะสรุปยอด:", all_cols, default=all_cols[:4])
 
@@ -132,56 +121,81 @@ if df is not None:
                     cols[i].metric(label=f"ผลรวม {col}", value=f"{val:,.0f}")
                 else:
                     count_total = len(df_filtered[col])
-                    count_unique = df_filtered[col].nunique()
-                    cols[i].metric(label=f"จำนวน {col}", value=f"{count_total:,}", delta=f"{count_unique} กลุ่ม")
+                    cols[i].metric(label=f"จำนวน {col}", value=f"{count_total:,} รายการ")
 
-        # กราฟ
         st.markdown("---")
+        
+        # กราฟ Stacked Bar & Pie
         g1, g2 = st.columns([2, 1])
+        
         with g1:
-            if date_col and num_cols:
-                y_axis = st.selectbox("แกน Y (กราฟเส้น):", num_cols, key="g1_y")
-                fig = px.line(df_filtered, x=date_col, y=y_axis, markers=True, title=f"Trend: {y_axis}")
-            elif cat_cols:
-                x_axis = st.selectbox("แกน X (กราฟแท่ง):", cat_cols, index=0, key="g1_x")
-                if num_cols:
-                    y_axis = st.selectbox("ค่าแกน Y:", num_cols, index=0, key="g1_y_bar")
-                    fig = px.bar(df_filtered, x=x_axis, y=y_axis, color=x_axis, title=f"ผลรวม {y_axis} ตาม {x_axis}")
-                else:
-                    fig = px.histogram(df_filtered, x=x_axis, title=f"จำนวนรายการแยกตาม {x_axis}")
-            if fig: st.plotly_chart(fig, use_container_width=True)
+            st.markdown("##### 📊 กราฟแท่ง (Bar Chart)")
+            x_axis = st.selectbox("แกน X (แนวนอน):", cat_cols, index=0, key="bar_x")
+            y_options = ["(นับจำนวนรายการ)"] + num_cols
+            y_axis = st.selectbox("แกน Y (แนวตั้ง):", y_options, key="bar_y")
+            stack_col = st.selectbox("แบ่งกลุ่มย่อย (ซ้อนกัน/สี):", ["(ไม่มี)"] + cat_cols, key="bar_stack")
+            
+            color_var = stack_col if stack_col != "(ไม่มี)" else x_axis
+            
+            if y_axis == "(นับจำนวนรายการ)":
+                fig_main = px.histogram(df_filtered, x=x_axis, color=color_var, barmode='stack', text_auto=True)
+            else:
+                fig_main = px.histogram(df_filtered, x=x_axis, y=y_axis, color=color_var, barmode='stack', text_auto=True)
+            
+            st.plotly_chart(fig_main, use_container_width=True)
 
         with g2:
+            st.markdown("##### 🍰 กราฟวงกลม (Pie Chart)")
             if cat_cols:
-                pie_col = st.selectbox("กราฟวงกลม:", cat_cols, index=min(1, len(cat_cols)-1), key="g2_pie")
-                if num_cols:
-                    fig_pie = px.pie(df_filtered, values=num_cols[0], names=pie_col, title=f"สัดส่วน {num_cols[0]}")
+                pie_col = st.selectbox("หัวข้อกราฟวงกลม:", cat_cols, index=min(1, len(cat_cols)-1), key="pie_select")
+                pie_val_opt = st.selectbox("ค่าที่แสดง:", ["(นับจำนวน)"] + num_cols, key="pie_val")
+                
+                if pie_val_opt == "(นับจำนวน)":
+                    fig_pie = px.pie(df_filtered, names=pie_col, hole=0.4)
                 else:
-                    fig_pie = px.pie(df_filtered, names=pie_col, title=f"สัดส่วนจำนวน {pie_col}")
+                    fig_pie = px.pie(df_filtered, values=pie_val_opt, names=pie_col, hole=0.4)
+                
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-        # ตาราง
-        with st.expander("📋 ดูตารางข้อมูลรายละเอียด", expanded=True):
+        # ========================================================
+        # 📝 ส่วนเพิ่มใหม่: Text Viewer (สำหรับอ่านข้อความ)
+        # ========================================================
+        st.markdown("---")
+        st.subheader("📝 4. อ่านข้อความ/ข้อเสนอแนะ (Text Comments)")
+        
+        with st.container():
+            # ให้เลือกคอลัมน์ที่เป็นข้อความ
+            text_col_select = st.selectbox("เลือกคอลัมน์ข้อความที่ต้องการอ่าน:", cat_cols, index=len(cat_cols)-1)
+            
+            # ดึงข้อมูลเฉพาะคอลัมน์นั้น ที่ไม่เป็นค่าว่าง (NaN)
+            text_data = df_filtered[text_col_select].dropna().astype(str)
+            text_data = text_data[text_data != "nan"] # กรองคำว่า nan ออก
+            text_data = text_data[text_data != ""]    # กรองค่าว่างออก
+
+            if not text_data.empty:
+                st.caption(f"พบข้อความทั้งหมด {len(text_data)} รายการ")
+                
+                # สร้างกล่องข้อความแบบ Scroll ได้
+                with st.container(height=400): # กำหนดความสูงกล่อง (เลื่อนดูได้)
+                    for i, txt in enumerate(text_data):
+                        # แสดงเป็นการ์ดข้อความสวยๆ
+                        st.info(f"💬 {txt}")
+            else:
+                st.warning("ไม่มีข้อความในคอลัมน์นี้ หรือข้อมูลว่างเปล่า")
+
+        # ตารางข้อมูลดิบ
+        st.markdown("---")
+        with st.expander("📋 ดูตารางข้อมูลทั้งหมด", expanded=False):
             st.dataframe(df_filtered, use_container_width=True)
             csv = df_filtered.to_csv(index=False).encode('utf-8')
             st.download_button("⬇️ ดาวน์โหลด CSV", csv, "filtered_data.csv", "text/csv")
+
     else:
         st.warning("❌ ไม่พบข้อมูลตามเงื่อนไข")
 
 else:
     st.info("👋 กรุณาเลือกวิธีนำเข้าข้อมูลด้านบน")
 
-# ==========================================
-# 5. FOOTER (เครดิตผู้จัดทำ)
-# ==========================================
-st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("---")
-st.markdown(
-    f"""
-    <div style='text-align: center; color: grey;'>
-        <p>Copyright © 2025 <b>งานถ่ายทอดการพยาบาล โรงพยาบาลราชวิถี</b></p>
-        <p>พัฒนาโดย: Nattachai Russmeedara | Powered by Python Streamlit</p>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+# FOOTER
+st.markdown("<br><br><hr>", unsafe_allow_html=True)
+st.markdown(f"<div style='text-align: center; color: grey;'><p>Copyright © 2025 <b>งานถ่ายทอดการพยาบาล โรงพยาบาลราชวิถี</b></p><p>พัฒนาโดย: Nattachai Russmeedara</p></div>", unsafe_allow_html=True)
