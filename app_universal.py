@@ -22,8 +22,8 @@ st.sidebar.subheader("ข้อมูลองค์กร")
 logo_path = "logo.png"  
 
 # ตั้งชื่อโรงพยาบาล
-hospital_name = st.sidebar.text_input("โรงพยาบาลราชวิถี", value="โรงพยาบาลตัวอย่าง (Demo Hospital)")
-sub_title = st.sidebar.text_input("Smart Analytics Dashboard", value="Smart Analytics Dashboard : ฝ่ายการพยาบาล")
+hospital_name = st.sidebar.text_input("โรงพยาบาลราชวิถี", value="โรงพยาบาลราชวิถี")
+sub_title = st.sidebar.text_input("Smart Analytics Dashboard", value="Smart Analytics Dashboard : งานถ่ายทอดการพยาบาล")
 dev_name = st.sidebar.text_input("งานถ่ายทอดการพยาบาล", value="ทีมสารสนเทศทางการพยาบาล")
 
 # --- แสดงผล Header บนหน้าจอหลัก ---
