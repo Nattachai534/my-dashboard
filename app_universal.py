@@ -1,5 +1,5 @@
 import ssl
-# แก้ปัญหา Certificate ในเครื่อง Mac (ตามที่คุณทำไว้)
+# แก้ปัญหา Certificate ในเครื่อง Mac/Windows
 ssl._create_default_https_context = ssl._create_unverified_context
 
 import streamlit as st
@@ -8,175 +8,185 @@ import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
 
 # --- 1. ตั้งค่าพื้นฐาน ---
-st.set_page_config(page_title="Universal Dashboard Pro", page_icon="📊", layout="wide")
-
-# ตั้งค่า Refresh อัตโนมัติทุก 30 วินาที
+st.set_page_config(page_title="Smart Analytics Dashboard", page_icon="📊", layout="wide")
 st_autorefresh(interval=30000, key="auto_refresh")
 
-st.title("📊 Universal Smart Dashboard (Pro)")
-st.markdown("รองรับทั้งไฟล์ Excel และ Google Sheets พร้อมระบบกรองข้อมูลที่แม่นยำ")
+st.title("📊 Smart Analytics Dashboard")
+st.markdown("ระบบวิเคราะห์ข้อมูลที่เชื่อมโยงกันทั้งระบบ (KPIs, กราฟ, ตาราง)")
 
-# --- 2. ส่วนเลือกแหล่งข้อมูล (Dual Input System) ---
+# --- 2. ส่วนเลือกแหล่งข้อมูล (Dual Input) ---
 st.markdown("---")
-st.subheader("📁 1. เลือกแหล่งข้อมูล")
+st.subheader("📁 1. แหล่งข้อมูล (Data Source)")
 
-# สร้าง Tab สำหรับเลือกวิธีนำเข้าข้อมูล
-tab_excel, tab_gsheet = st.tabs(["📂 อัปโหลดไฟล์ Excel", "🔗 ลิงก์ Google Sheets"])
+tab_excel, tab_gsheet = st.tabs(["📂 อัปโหลด Excel", "🔗 ลิงก์ Google Sheets"])
+df = None 
 
-df = None  # ตัวแปรสำหรับเก็บข้อมูลที่จะนำไปใช้ต่อ
-
-# === TAB 1: สำหรับไฟล์ Excel ===
+# TAB 1: Excel
 with tab_excel:
-    uploaded_file = st.file_uploader("เลือกไฟล์ Excel (.xlsx) จากเครื่องของคุณ", type=["xlsx", "xls"])
+    uploaded_file = st.file_uploader("เลือกไฟล์ Excel (.xlsx)", type=["xlsx", "xls"])
     if uploaded_file is not None:
         try:
             df = pd.read_excel(uploaded_file)
-            st.success(f"✅ อ่านไฟล์ Excel สำเร็จ: {uploaded_file.name}")
+            st.success(f"✅ โหลดไฟล์สำเร็จ: {uploaded_file.name}")
         except Exception as e:
             st.error(f"❌ อ่านไฟล์ไม่ได้: {e}")
 
-# === TAB 2: สำหรับ Google Sheets (ใช้ฟังก์ชันเดิมของคุณ) ===
+# TAB 2: Google Sheets
 with tab_gsheet:
-    # Link เริ่มต้น
     default_url = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?usp=sharing"
-    gsheet_url = st.text_input("วางลิงก์ Google Sheet ที่นี่:", value=default_url)
+    gsheet_url = st.text_input("วางลิงก์ Google Sheet:", value=default_url)
 
     @st.cache_data(ttl=0)
     def load_gsheet_data(url):
         try:
             if "docs.google.com/spreadsheets" in url:
-                # แปลง Link
                 export_url = url.replace('/edit?usp=sharing', '/export?format=csv').replace('/edit', '/export?format=csv')
-                # จัดการ gid
                 if "#gid=" in url:
                     gid_part = url.split("#gid=")[1]
                     export_url = f"{export_url}&gid={gid_part}"
-                
                 return pd.read_csv(export_url)
             return None
         except Exception as e:
-            st.error(f"❌ อ่านไฟล์ Google Sheet ไม่ได้: {e}")
+            st.error(f"❌ อ่าน Link ไม่ได้: {e}")
             return None
 
-    # ถ้าไม่ได้อัป Excel ให้ลองดูที่ Google Sheet
     if df is None and gsheet_url:
         df_gs = load_gsheet_data(gsheet_url)
         if df_gs is not None:
             df = df_gs
             st.success("✅ เชื่อมต่อ Google Sheet สำเร็จ")
 
-# --- 3. เริ่มทำงานเมื่อมีข้อมูล (df) ---
+# --- เริ่มการทำงานเมื่อมีข้อมูล ---
 if df is not None:
     # เตรียมข้อมูลคอลัมน์
     all_cols = df.columns.tolist()
-    num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
-    cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+    num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist() # ตัวเลข
+    cat_cols = df.select_dtypes(include=['object']).columns.tolist() # ตัวหนังสือ
     
-    # หาคอลัมน์วันที่อัตโนมัติ
-    time_keywords = ['date', 'time', 'year', 'month', 'day', 'วัน', 'เดือน', 'ปี', 'เวลา']
+    # หาคอลัมน์วันที่
+    time_keywords = ['date', 'time', 'year', 'month', 'day', 'วัน', 'เดือน', 'ปี']
     date_col = next((col for col in cat_cols if any(k in col.lower() for k in time_keywords)), None)
 
     # ==========================================
-    # ส่วนที่ 4: ระบบกรองข้อมูล (Filter)
+    # ส่วนที่ 3: ตัวกรอง (Filter) - หัวใจสำคัญ
     # ==========================================
     st.markdown("---")
-    st.subheader("🔍 2. กรองและค้นหาข้อมูล")
+    st.subheader("🔍 2. กรองข้อมูล (Filter)")
+    
+    # ใช้กรอบสีฟ้าครอบส่วนกรองเพื่อให้เด่นชัด
+    with st.container():
+        c1, c2, c3 = st.columns([1, 1, 2])
+        
+        # 3.1 เลือกหัวข้อกรอง
+        with c1:
+            filter_main = st.selectbox("เลือกหัวข้อหลัก:", ["(แสดงทั้งหมด)"] + cat_cols)
+        
+        # 3.2 เลือกค่าในหัวข้อ
+        with c2:
+            selected_sub = []
+            if filter_main != "(แสดงทั้งหมด)":
+                unique_val = df[filter_main].unique()
+                selected_sub = st.multiselect(f"เลือก {filter_main}:", unique_val, default=unique_val)
+            else:
+                st.info("แสดงข้อมูลทั้งหมด")
 
-    # จัดวาง Layout ตัวกรอง
-    c_filter1, c_filter2, c_search = st.columns([1, 1, 2])
+        # 3.3 ค้นหาอิสระ
+        with c3:
+            search_txt = st.text_input("ค้นหาเพิ่มเติม (พิมพ์คำที่ต้องการ):", placeholder="เช่น ชื่อคน, จังหวัด...")
 
-    with c_filter1:
-        # เลือกหัวข้อที่จะกรอง
-        filter_col = st.selectbox("กรองด้วยหัวข้อ:", ["(แสดงทั้งหมด)"] + cat_cols)
-
-    with c_filter2:
-        # เลือกค่าในหัวข้อนั้น
-        if filter_col != "(แสดงทั้งหมด)":
-            unique_vals = df[filter_col].unique()
-            selected_vals = st.multiselect(f"เลือก {filter_col}:", unique_vals, default=unique_vals)
-        else:
-            selected_vals = []
-            st.info("แสดงข้อมูลทั้งหมด")
-
-    with c_search:
-        # ช่องค้นหาอิสระ
-        search_query = st.text_input("พิมพ์คำค้นหาเพิ่มเติม (Search):", placeholder="เช่น ชื่อคน, รหัส, แผนก...")
-
-    # --- PROCESS FILTERING (กรองข้อมูลจริง) ---
+    # --- PROCESS FILTER (กรองข้อมูลจริง) ---
     df_filtered = df.copy()
 
-    # 1. กรองตาม Dropdown
-    if filter_col != "(แสดงทั้งหมด)" and selected_vals:
-        df_filtered = df_filtered[df_filtered[filter_col].isin(selected_vals)]
+    # กรองชั้นที่ 1 (Dropdown)
+    if filter_main != "(แสดงทั้งหมด)" and selected_sub:
+        df_filtered = df_filtered[df_filtered[filter_main].isin(selected_sub)]
     
-    # 2. กรองตามคำค้นหา (Search Box)
-    if search_query:
-        mask = df_filtered.astype(str).apply(lambda x: x.str.contains(search_query, case=False, na=False)).any(axis=1)
+    # กรองชั้นที่ 2 (Search Text)
+    if search_txt:
+        mask = df_filtered.astype(str).apply(lambda x: x.str.contains(search_txt, case=False, na=False)).any(axis=1)
         df_filtered = df_filtered[mask]
 
-    # แสดงผลจำนวนที่พบ
-    st.caption(f"⚡ ผลลัพธ์: พบ {len(df_filtered)} รายการ (จากทั้งหมด {len(df)})")
+    st.caption(f"⚡ ข้อมูลที่แสดงผล: {len(df_filtered)} รายการ (จากทั้งหมด {len(df)})")
 
     # ==========================================
-    # ส่วนที่ 5: แสดงตารางข้อมูล (Data Table)
-    # ==========================================
-    # ใส่ใน Expander เพื่อไม่ให้รก และแสดงเฉพาะข้อมูลที่กรองมาแล้วเท่านั้น
-    with st.expander("📋 ดูตารางข้อมูลรายละเอียด (คลิกเพื่อดู)", expanded=True):
-        if not df_filtered.empty:
-            st.dataframe(df_filtered, use_container_width=True, height=350)
-            
-            # ปุ่มดาวน์โหลด
-            csv = df_filtered.to_csv(index=False).encode('utf-8')
-            st.download_button("⬇️ ดาวน์โหลดข้อมูลชุดนี้ (CSV)", csv, "filtered_data.csv", "text/csv")
-        else:
-            st.warning("❌ ไม่พบข้อมูลที่ตรงกับเงื่อนไข")
-
-    # ==========================================
-    # ส่วนที่ 6: แสดง Dashboard & Graphs
+    # ส่วนที่ 4: สรุปผล KPI (ปรับปรุงใหม่ตามโจทย์)
     # ==========================================
     st.markdown("---")
-    st.subheader("📈 3. สรุปผล Dashboard")
+    st.subheader("📈 3. สรุปผลภาพรวม (Dashboard)")
 
     if not df_filtered.empty:
-        # 6.1 KPI Cards (สรุปตัวเลข)
-        if num_cols:
-            st.caption("สรุปยอดรวมจากข้อมูลที่เลือก")
-            cols_metric = st.columns(min(len(num_cols), 4))
-            for i, col_name in enumerate(num_cols[:4]):
-                val = df_filtered[col_name].sum()
-                cols_metric[i].metric(f"ผลรวม {col_name}", f"{val:,.0f}")
-            st.markdown("---")
+        # ให้ User เลือกได้เองว่าจะโชว์ KPI อะไรบ้าง
+        with st.expander("⚙️ ตั้งค่า: เลือกข้อมูลที่จะแสดงใน KPI Card", expanded=True):
+            # Default: เลือกคอลัมน์ทั้งหมดมาให้เลือก
+            selected_kpi_cols = st.multiselect("เลือกหัวข้อที่ต้องการสรุปยอด (เลือกได้หลายอัน):", all_cols, default=all_cols[:4])
 
-        # 6.2 Auto Graphs (สร้างกราฟอัตโนมัติ)
+        # แสดง KPI Cards
+        if selected_kpi_cols:
+            # จัดแถว KPI (4 การ์ดต่อ 1 แถว)
+            cols = st.columns(len(selected_kpi_cols))
+            
+            for i, col in enumerate(selected_kpi_cols):
+                # ตรวจสอบว่าเป็น "ตัวเลข" หรือ "ตัวหนังสือ"
+                if col in num_cols:
+                    # ถ้าเป็นตัวเลข -> รวมผล (Sum)
+                    val = df_filtered[col].sum()
+                    cols[i].metric(label=f"ผลรวม {col}", value=f"{val:,.0f}")
+                else:
+                    # ถ้าเป็นตัวหนังสือ -> นับจำนวน (Count)
+                    # นับจำนวนรายการทั้งหมด
+                    count_total = len(df_filtered[col])
+                    # นับจำนวนที่ไม่ซ้ำ (เช่น มี 5 จังหวัด)
+                    count_unique = df_filtered[col].nunique()
+                    
+                    cols[i].metric(label=f"จำนวน {col}", value=f"{count_total:,}", delta=f"{count_unique} รายการไม่ซ้ำ")
+        else:
+            st.info("กรุณาเลือกหัวข้อ KPI ด้านบน ☝️")
+
+        st.markdown("---")
+
+        # ==========================================
+        # ส่วนที่ 5: กราฟ (Linked Graphs)
+        # ==========================================
         g1, g2 = st.columns([2, 1])
         
         with g1:
-            # ถ้ามีวันที่ -> กราฟเส้น
             if date_col and num_cols:
-                y_axis = st.selectbox("เลือกแกน Y (แนวโน้ม):", num_cols, key="y_line")
-                fig_main = px.line(df_filtered, x=date_col, y=y_axis, markers=True, title=f"แนวโน้ม {y_axis}")
+                y_axis = st.selectbox("แกน Y (แนวโน้ม):", num_cols, key="g1_y")
+                fig = px.line(df_filtered, x=date_col, y=y_axis, markers=True, title=f"Trend: {y_axis}")
+            elif cat_cols:
+                # ถ้าไม่มีวันที่ ให้กราฟแท่งนับจำนวนตามหมวดหมู่
+                x_axis = st.selectbox("เลือกแกน X (กราฟแท่ง):", cat_cols, index=0, key="g1_x")
+                if num_cols:
+                    y_axis = st.selectbox("เลือกค่าที่จะรวม (แกน Y):", num_cols, index=0, key="g1_y_bar")
+                    fig = px.bar(df_filtered, x=x_axis, y=y_axis, color=x_axis, title=f"ผลรวม {y_axis} แยกตาม {x_axis}")
+                else:
+                    # นับจำนวนเฉยๆ
+                    fig = px.histogram(df_filtered, x=x_axis, title=f"จำนวนรายการแยกตาม {x_axis}")
             
-            # ถ้าไม่มีวันที่ -> กราฟแท่ง
-            elif num_cols and cat_cols:
-                x_axis = st.selectbox("เลือกแกน X (เปรียบเทียบ):", cat_cols, index=0, key="x_bar")
-                y_axis = st.selectbox("เลือกแกน Y:", num_cols, index=0, key="y_bar")
-                fig_main = px.bar(df_filtered, x=x_axis, y=y_axis, color=x_axis, title=f"เปรียบเทียบ {y_axis} by {x_axis}")
-            
-            # ถ้ามีแต่ชื่อ -> กราฟนับจำนวน
-            else:
-                x_axis = st.selectbox("นับจำนวนตามหัวข้อ:", cat_cols, index=0) if cat_cols else None
-                fig_main = px.histogram(df_filtered, x=x_axis, title=f"จำนวนรายการแยกตาม {x_axis}") if x_axis else None
-            
-            if fig_main: st.plotly_chart(fig_main, use_container_width=True)
+            if fig: st.plotly_chart(fig, use_container_width=True)
 
         with g2:
-            # กราฟวงกลม (Pie Chart)
             if cat_cols:
-                pie_col = st.selectbox("แบ่งกลุ่มตาม (Pie Chart):", cat_cols, index=min(1, len(cat_cols)-1), key="pie_select")
+                pie_col = st.selectbox("เลือกหัวข้อกราฟวงกลม:", cat_cols, index=min(1, len(cat_cols)-1), key="g2_pie")
                 if num_cols:
+                    # วงกลมแบบมีค่าตัวเลข
                     fig_pie = px.pie(df_filtered, values=num_cols[0], names=pie_col, title=f"สัดส่วน {num_cols[0]}")
                 else:
-                    fig_pie = px.pie(df_filtered, names=pie_col, title=f"สัดส่วนจำนวน")
+                    # วงกลมแบบนับจำนวน
+                    fig_pie = px.pie(df_filtered, names=pie_col, title=f"สัดส่วนจำนวนตาม {pie_col}")
                 st.plotly_chart(fig_pie, use_container_width=True)
+
+        # ==========================================
+        # ส่วนที่ 6: ตารางข้อมูล (Filtered Table)
+        # ==========================================
+        st.markdown("---")
+        with st.expander("📋 ตารางข้อมูลรายละเอียด (คลิกเพื่อดู)", expanded=True):
+            st.dataframe(df_filtered, use_container_width=True)
+            csv = df_filtered.to_csv(index=False).encode('utf-8')
+            st.download_button("⬇️ ดาวน์โหลดข้อมูลที่กรอง (CSV)", csv, "filtered_data.csv", "text/csv")
+            
+    else:
+        st.warning("❌ ไม่พบข้อมูลที่ตรงกับเงื่อนไขการกรอง")
+
 else:
-    st.info("👋 กรุณาเลือกวิธีนำเข้าข้อมูล (Excel หรือ Google Sheet Link) ด้านบนเพื่อเริ่มต้น")
+    st.info("👋 กรุณาเลือกวิธีนำเข้าข้อมูลด้านบนเพื่อเริ่มต้น")
