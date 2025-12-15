@@ -1,5 +1,4 @@
 import ssl
-# แก้ปัญหา Certificate ในเครื่อง Mac/Windows
 ssl._create_default_https_context = ssl._create_unverified_context
 
 import streamlit as st
@@ -7,17 +6,48 @@ import pandas as pd
 import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. ตั้งค่าพื้นฐาน ---
-st.set_page_config(page_title="Smart Analytics Dashboard", page_icon="📊", layout="wide")
+# --- 1. ตั้งค่าพื้นฐาน (Page Config) ---
+st.set_page_config(page_title="Hospital Smart Dashboard", page_icon="🏥", layout="wide")
 st_autorefresh(interval=30000, key="auto_refresh")
 
-st.title("📊 Smart Analytics Dashboard")
-st.markdown("ระบบวิเคราะห์ข้อมูลที่เชื่อมโยงกันทั้งระบบ (KPIs, กราฟ, ตาราง)")
+# ==========================================
+# ส่วนที่เพิ่มใหม่: HEADER & LOGO (ส่วนหัวแบบทางการ)
+# ==========================================
 
-# --- 2. ส่วนเลือกแหล่งข้อมูล (Dual Input) ---
-st.markdown("---")
+# --- Sidebar: ตั้งค่าข้อมูลโรงพยาบาล ---
+st.sidebar.title("⚙️ ตั้งค่าการแสดงผล")
+st.sidebar.subheader("ข้อมูลองค์กร")
+
+# 1. อัปโหลดโลโก้
+uploaded_logo = st.sidebar.file_uploader("อัปโหลดโลโก้ รพ. (PNG/JPG)", type=['png', 'jpg', 'jpeg'])
+# 2. ตั้งชื่อโรงพยาบาล
+hospital_name = st.sidebar.text_input("ชื่อโรงพยาบาล/หน่วยงาน", value="โรงพยาบาลตัวอย่าง (Demo Hospital)")
+sub_title = st.sidebar.text_input("ชื่อระบบ/แผนก", value="Smart Analytics Dashboard : ฝ่ายการพยาบาล")
+# 3. ข้อมูลผู้จัดทำ
+dev_name = st.sidebar.text_input("ชื่อผู้จัดทำ (Developer)", value="ทีมสารสนเทศทางการพยาบาล")
+
+# --- แสดงผล Header บนหน้าจอหลัก ---
+col_logo, col_header = st.columns([1, 5]) # แบ่งสัดส่วน โลโก้ 1 ส่วน : ข้อความ 5 ส่วน
+
+with col_logo:
+    if uploaded_logo is not None:
+        st.image(uploaded_logo, width=120) # แสดงรูปที่อัปโหลด
+    else:
+        # แสดงรูปไอคอนพยาบาลตัวอย่าง ถ้ายังไม่ได้อัปโหลด
+        st.markdown("## 🏥") 
+
+with col_header:
+    st.title(hospital_name) # ชื่อโรงพยาบาล (ตัวใหญ่)
+    st.markdown(f"### {sub_title}") # ชื่อระบบ (ตัวรอง)
+
+st.markdown("---") # เส้นขีดคั่นเพื่อความสวยงาม
+
+# ==========================================
+# ส่วนเดิม: การทำงานหลัก (Logic)
+# ==========================================
+
+# --- ส่วนเลือกแหล่งข้อมูล ---
 st.subheader("📁 1. แหล่งข้อมูล (Data Source)")
-
 tab_excel, tab_gsheet = st.tabs(["📂 อัปโหลด Excel", "🔗 ลิงก์ Google Sheets"])
 df = None 
 
@@ -58,135 +88,98 @@ with tab_gsheet:
 
 # --- เริ่มการทำงานเมื่อมีข้อมูล ---
 if df is not None:
-    # เตรียมข้อมูลคอลัมน์
     all_cols = df.columns.tolist()
-    num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist() # ตัวเลข
-    cat_cols = df.select_dtypes(include=['object']).columns.tolist() # ตัวหนังสือ
-    
-    # หาคอลัมน์วันที่
+    num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+    cat_cols = df.select_dtypes(include=['object']).columns.tolist()
     time_keywords = ['date', 'time', 'year', 'month', 'day', 'วัน', 'เดือน', 'ปี']
     date_col = next((col for col in cat_cols if any(k in col.lower() for k in time_keywords)), None)
 
-    # ==========================================
-    # ส่วนที่ 3: ตัวกรอง (Filter) - หัวใจสำคัญ
-    # ==========================================
-    st.markdown("---")
-    st.subheader("🔍 2. กรองข้อมูล (Filter)")
-    
-    # ใช้กรอบสีฟ้าครอบส่วนกรองเพื่อให้เด่นชัด
+    # --- ส่วนกรองข้อมูล ---
+    st.markdown("#### 🔍 2. กรองข้อมูล (Filter)")
     with st.container():
         c1, c2, c3 = st.columns([1, 1, 2])
-        
-        # 3.1 เลือกหัวข้อกรอง
-        with c1:
-            filter_main = st.selectbox("เลือกหัวข้อหลัก:", ["(แสดงทั้งหมด)"] + cat_cols)
-        
-        # 3.2 เลือกค่าในหัวข้อ
+        with c1: filter_main = st.selectbox("เลือกหัวข้อหลัก:", ["(แสดงทั้งหมด)"] + cat_cols)
         with c2:
             selected_sub = []
             if filter_main != "(แสดงทั้งหมด)":
                 unique_val = df[filter_main].unique()
                 selected_sub = st.multiselect(f"เลือก {filter_main}:", unique_val, default=unique_val)
-            else:
-                st.info("แสดงข้อมูลทั้งหมด")
+            else: st.info("แสดงข้อมูลทั้งหมด")
+        with c3: search_txt = st.text_input("ค้นหาเพิ่มเติม:", placeholder="พิมพ์คำที่ต้องการ...")
 
-        # 3.3 ค้นหาอิสระ
-        with c3:
-            search_txt = st.text_input("ค้นหาเพิ่มเติม (พิมพ์คำที่ต้องการ):", placeholder="เช่น ชื่อคน, จังหวัด...")
-
-    # --- PROCESS FILTER (กรองข้อมูลจริง) ---
     df_filtered = df.copy()
-
-    # กรองชั้นที่ 1 (Dropdown)
     if filter_main != "(แสดงทั้งหมด)" and selected_sub:
         df_filtered = df_filtered[df_filtered[filter_main].isin(selected_sub)]
-    
-    # กรองชั้นที่ 2 (Search Text)
     if search_txt:
         mask = df_filtered.astype(str).apply(lambda x: x.str.contains(search_txt, case=False, na=False)).any(axis=1)
         df_filtered = df_filtered[mask]
+    
+    st.caption(f"⚡ แสดงผล: {len(df_filtered)} รายการ")
 
-    st.caption(f"⚡ ข้อมูลที่แสดงผล: {len(df_filtered)} รายการ (จากทั้งหมด {len(df)})")
-
-    # ==========================================
-    # ส่วนที่ 4: สรุปผล KPI (ปรับปรุงใหม่ตามโจทย์)
-    # ==========================================
+    # --- ส่วน Dashboard ---
     st.markdown("---")
     st.subheader("📈 3. สรุปผลภาพรวม (Dashboard)")
 
     if not df_filtered.empty:
-        # ให้ User เลือกได้เองว่าจะโชว์ KPI อะไรบ้าง
-        with st.expander("⚙️ ตั้งค่า: เลือกข้อมูลที่จะแสดงใน KPI Card", expanded=True):
-            # Default: เลือกคอลัมน์ทั้งหมดมาให้เลือก
-            selected_kpi_cols = st.multiselect("เลือกหัวข้อที่ต้องการสรุปยอด (เลือกได้หลายอัน):", all_cols, default=all_cols[:4])
+        with st.expander("⚙️ ตั้งค่า KPI Card", expanded=True):
+            selected_kpi_cols = st.multiselect("เลือกหัวข้อ KPI:", all_cols, default=all_cols[:4])
 
-        # แสดง KPI Cards
         if selected_kpi_cols:
-            # จัดแถว KPI (4 การ์ดต่อ 1 แถว)
             cols = st.columns(len(selected_kpi_cols))
-            
             for i, col in enumerate(selected_kpi_cols):
-                # ตรวจสอบว่าเป็น "ตัวเลข" หรือ "ตัวหนังสือ"
                 if col in num_cols:
-                    # ถ้าเป็นตัวเลข -> รวมผล (Sum)
                     val = df_filtered[col].sum()
                     cols[i].metric(label=f"ผลรวม {col}", value=f"{val:,.0f}")
                 else:
-                    # ถ้าเป็นตัวหนังสือ -> นับจำนวน (Count)
-                    # นับจำนวนรายการทั้งหมด
                     count_total = len(df_filtered[col])
-                    # นับจำนวนที่ไม่ซ้ำ (เช่น มี 5 จังหวัด)
                     count_unique = df_filtered[col].nunique()
-                    
-                    cols[i].metric(label=f"จำนวน {col}", value=f"{count_total:,}", delta=f"{count_unique} รายการไม่ซ้ำ")
-        else:
-            st.info("กรุณาเลือกหัวข้อ KPI ด้านบน ☝️")
+                    cols[i].metric(label=f"จำนวน {col}", value=f"{count_total:,}", delta=f"{count_unique} กลุ่มข้อมูล")
 
-        st.markdown("---")
-
-        # ==========================================
-        # ส่วนที่ 5: กราฟ (Linked Graphs)
-        # ==========================================
         g1, g2 = st.columns([2, 1])
-        
         with g1:
             if date_col and num_cols:
-                y_axis = st.selectbox("แกน Y (แนวโน้ม):", num_cols, key="g1_y")
+                y_axis = st.selectbox("แกน Y (กราฟเส้น):", num_cols, key="g1_y")
                 fig = px.line(df_filtered, x=date_col, y=y_axis, markers=True, title=f"Trend: {y_axis}")
             elif cat_cols:
-                # ถ้าไม่มีวันที่ ให้กราฟแท่งนับจำนวนตามหมวดหมู่
-                x_axis = st.selectbox("เลือกแกน X (กราฟแท่ง):", cat_cols, index=0, key="g1_x")
+                x_axis = st.selectbox("แกน X (กราฟแท่ง):", cat_cols, index=0, key="g1_x")
                 if num_cols:
-                    y_axis = st.selectbox("เลือกค่าที่จะรวม (แกน Y):", num_cols, index=0, key="g1_y_bar")
-                    fig = px.bar(df_filtered, x=x_axis, y=y_axis, color=x_axis, title=f"ผลรวม {y_axis} แยกตาม {x_axis}")
+                    y_axis = st.selectbox("ค่าแกน Y:", num_cols, index=0, key="g1_y_bar")
+                    fig = px.bar(df_filtered, x=x_axis, y=y_axis, color=x_axis, title=f"ผลรวม {y_axis} ตาม {x_axis}")
                 else:
-                    # นับจำนวนเฉยๆ
                     fig = px.histogram(df_filtered, x=x_axis, title=f"จำนวนรายการแยกตาม {x_axis}")
-            
             if fig: st.plotly_chart(fig, use_container_width=True)
 
         with g2:
             if cat_cols:
-                pie_col = st.selectbox("เลือกหัวข้อกราฟวงกลม:", cat_cols, index=min(1, len(cat_cols)-1), key="g2_pie")
+                pie_col = st.selectbox("กราฟวงกลม:", cat_cols, index=min(1, len(cat_cols)-1), key="g2_pie")
                 if num_cols:
-                    # วงกลมแบบมีค่าตัวเลข
                     fig_pie = px.pie(df_filtered, values=num_cols[0], names=pie_col, title=f"สัดส่วน {num_cols[0]}")
                 else:
-                    # วงกลมแบบนับจำนวน
-                    fig_pie = px.pie(df_filtered, names=pie_col, title=f"สัดส่วนจำนวนตาม {pie_col}")
+                    fig_pie = px.pie(df_filtered, names=pie_col, title=f"สัดส่วนจำนวน {pie_col}")
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-        # ==========================================
-        # ส่วนที่ 6: ตารางข้อมูล (Filtered Table)
-        # ==========================================
-        st.markdown("---")
-        with st.expander("📋 ตารางข้อมูลรายละเอียด (คลิกเพื่อดู)", expanded=True):
+        with st.expander("📋 ตารางข้อมูลรายละเอียด", expanded=True):
             st.dataframe(df_filtered, use_container_width=True)
             csv = df_filtered.to_csv(index=False).encode('utf-8')
-            st.download_button("⬇️ ดาวน์โหลดข้อมูลที่กรอง (CSV)", csv, "filtered_data.csv", "text/csv")
-            
+            st.download_button("⬇️ ดาวน์โหลด CSV", csv, "filtered_data.csv", "text/csv")
     else:
-        st.warning("❌ ไม่พบข้อมูลที่ตรงกับเงื่อนไขการกรอง")
+        st.warning("❌ ไม่พบข้อมูล")
 
 else:
-    st.info("👋 กรุณาเลือกวิธีนำเข้าข้อมูลด้านบนเพื่อเริ่มต้น")
+    st.info("👋 กรุณาเลือกวิธีนำเข้าข้อมูลด้านบน")
+
+# ==========================================
+# ส่วนที่เพิ่มใหม่: FOOTER (เครดิตผู้จัดทำ)
+# ==========================================
+st.markdown("<br><br>", unsafe_allow_html=True) # เว้นบรรทัด
+st.markdown("---")
+# จัดกึ่งกลาง และใส่สีเทาเพื่อให้ดูเป็น Footer
+st.markdown(
+    f"""
+    <div style='text-align: center; color: grey;'>
+        <p>Copyright © 2024 <b>{hospital_name}</b></p>
+        <p>พัฒนาโดย: {dev_name} | Powered by Python Streamlit</p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
