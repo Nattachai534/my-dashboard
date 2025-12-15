@@ -1,4 +1,5 @@
 import ssl
+# แก้ปัญหา Certificate สำหรับเครื่องบางเครื่อง
 ssl._create_default_https_context = ssl._create_unverified_context
 
 import streamlit as st
@@ -6,50 +7,42 @@ import pandas as pd
 import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. ตั้งค่าพื้นฐาน (Page Config) ---
-st.set_page_config(page_title="Hospital Smart Dashboard", page_icon="🏥", layout="wide")
+# ==========================================
+# ⚙️ ส่วนตั้งค่า (แก้ไขข้อความตรงนี้)
+# ==========================================
+LOGO_FILENAME = "logo.png"  # ชื่อไฟล์โลโก้ (ต้องวางคู่กับไฟล์ app.py)
+HOSPITAL_NAME = "โรงพยาบาลราชวิถี"
+SYSTEM_NAME = "Smart Analytics Dashboard : งานถ่ายทอดการพยาบาล"
+DEV_NAME = "งานถ่ายทอดการพยาบาล"
+
+# ==========================================
+# 1. ตั้งค่าหน้าเว็บ
+# ==========================================
+st.set_page_config(page_title=SYSTEM_NAME, page_icon="🏥", layout="wide")
 st_autorefresh(interval=30000, key="auto_refresh")
 
 # ==========================================
-# ส่วนที่ปรับปรุง: HEADER & LOGO (ฝังโลโก้ถาวร)
+# 2. ส่วนหัว (HEADER) - แบบ Hardcode
 # ==========================================
+c_logo, c_title = st.columns([1, 6])
 
-# --- Sidebar: ตั้งค่าข้อมูลโรงพยาบาล (เหลือแค่ชื่อ) ---
-st.sidebar.title("⚙️ ตั้งค่าการแสดงผล")
-st.sidebar.subheader("ข้อมูลองค์กร")
-
-# ตั้งค่าชื่อไฟล์โลโก้ตรงนี้ (ต้องชื่อตรงกับไฟล์ในโฟลเดอร์เป๊ะๆ)
-logo_path = "logo.png"  
-
-# ตั้งชื่อโรงพยาบาล
-hospital_name = st.sidebar.text_input("โรงพยาบาลราชวิถี", value="โรงพยาบาลราชวิถี")
-sub_title = st.sidebar.text_input("Smart Analytics Dashboard", value="Smart Analytics Dashboard : งานถ่ายทอดการพยาบาล")
-dev_name = st.sidebar.text_input("งานถ่ายทอดการพยาบาล", value="ทีมสารสนเทศทางการพยาบาล")
-
-# --- แสดงผล Header บนหน้าจอหลัก ---
-col_logo, col_header = st.columns([1, 5]) # แบ่งสัดส่วน
-
-with col_logo:
+with c_logo:
     try:
-        # พยายามอ่านไฟล์รูปจากโฟลเดอร์
-        st.image(logo_path, width=130) 
+        st.image(LOGO_FILENAME, width=110)
     except:
-        # ถ้าหาไฟล์ไม่เจอ ให้แสดง Emoji แทน (กันโปรแกรม Error)
-        st.markdown("# 🏥") 
-        st.caption("ไม่พบไฟล์ logo.png")
+        # ถ้าหาไฟล์รูปไม่เจอ ให้โชว์ไอคอนแทน
+        st.markdown("# 🏥")
 
-with col_header:
-    st.title(hospital_name) # ชื่อโรงพยาบาล
-    st.markdown(f"### {sub_title}") # ชื่อระบบ
+with c_title:
+    st.title(HOSPITAL_NAME)
+    st.markdown(f"### {SYSTEM_NAME}")
 
-st.markdown("---") # เส้นขีดคั่น
+st.markdown("---")
 
 # ==========================================
-# ส่วนเดิม: การทำงานหลัก (Logic)
+# 3. ส่วนนำเข้าข้อมูล (Data Source)
 # ==========================================
-
-# --- ส่วนเลือกแหล่งข้อมูล ---
-st.subheader("📁 1. แหล่งข้อมูล (Data Source)")
+st.subheader("📁 1. แหล่งข้อมูล")
 tab_excel, tab_gsheet = st.tabs(["📂 อัปโหลด Excel", "🔗 ลิงก์ Google Sheets"])
 df = None 
 
@@ -88,7 +81,9 @@ with tab_gsheet:
             df = df_gs
             st.success("✅ เชื่อมต่อ Google Sheet สำเร็จ")
 
-# --- เริ่มการทำงานเมื่อมีข้อมูล ---
+# ==========================================
+# 4. เริ่มประมวลผล (เมื่อมีข้อมูล)
+# ==========================================
 if df is not None:
     all_cols = df.columns.tolist()
     num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
@@ -96,8 +91,9 @@ if df is not None:
     time_keywords = ['date', 'time', 'year', 'month', 'day', 'วัน', 'เดือน', 'ปี']
     date_col = next((col for col in cat_cols if any(k in col.lower() for k in time_keywords)), None)
 
-    # --- ส่วนกรองข้อมูล ---
+    # --- ส่วนกรองข้อมูล (Filter) ---
     st.markdown("#### 🔍 2. กรองข้อมูล (Filter)")
+    # ใช้ style container เพื่อความสวยงาม
     with st.container():
         c1, c2, c3 = st.columns([1, 1, 2])
         with c1: filter_main = st.selectbox("เลือกหัวข้อหลัก:", ["(แสดงทั้งหมด)"] + cat_cols)
@@ -107,8 +103,9 @@ if df is not None:
                 unique_val = df[filter_main].unique()
                 selected_sub = st.multiselect(f"เลือก {filter_main}:", unique_val, default=unique_val)
             else: st.info("แสดงข้อมูลทั้งหมด")
-        with c3: search_txt = st.text_input("ค้นหาเพิ่มเติม:", placeholder="พิมพ์คำที่ต้องการ...")
+        with c3: search_txt = st.text_input("ค้นหาเพิ่มเติม:", placeholder="พิมพ์คำค้นหา...")
 
+    # Logic การกรอง
     df_filtered = df.copy()
     if filter_main != "(แสดงทั้งหมด)" and selected_sub:
         df_filtered = df_filtered[df_filtered[filter_main].isin(selected_sub)]
@@ -120,11 +117,12 @@ if df is not None:
 
     # --- ส่วน Dashboard ---
     st.markdown("---")
-    st.subheader("📈 3. สรุปผลภาพรวม (Dashboard)")
+    st.subheader("📈 3. สรุปผลภาพรวม")
 
     if not df_filtered.empty:
-        with st.expander("⚙️ ตั้งค่า KPI Card", expanded=True):
-            selected_kpi_cols = st.multiselect("เลือกหัวข้อ KPI:", all_cols, default=all_cols[:4])
+        # เลือก KPI (ใส่ไว้ใน Expander เพื่อไม่ให้รก)
+        with st.expander("⚙️ เลือกหัวข้อ KPI Card", expanded=True):
+            selected_kpi_cols = st.multiselect("เลือกข้อมูลที่จะสรุปยอด:", all_cols, default=all_cols[:4])
 
         if selected_kpi_cols:
             cols = st.columns(len(selected_kpi_cols))
@@ -135,8 +133,10 @@ if df is not None:
                 else:
                     count_total = len(df_filtered[col])
                     count_unique = df_filtered[col].nunique()
-                    cols[i].metric(label=f"จำนวน {col}", value=f"{count_total:,}", delta=f"{count_unique} กลุ่มข้อมูล")
+                    cols[i].metric(label=f"จำนวน {col}", value=f"{count_total:,}", delta=f"{count_unique} กลุ่ม")
 
+        # กราฟ
+        st.markdown("---")
         g1, g2 = st.columns([2, 1])
         with g1:
             if date_col and num_cols:
@@ -160,26 +160,26 @@ if df is not None:
                     fig_pie = px.pie(df_filtered, names=pie_col, title=f"สัดส่วนจำนวน {pie_col}")
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-        with st.expander("📋 ตารางข้อมูลรายละเอียด", expanded=True):
+        # ตาราง
+        with st.expander("📋 ดูตารางข้อมูลรายละเอียด", expanded=True):
             st.dataframe(df_filtered, use_container_width=True)
             csv = df_filtered.to_csv(index=False).encode('utf-8')
             st.download_button("⬇️ ดาวน์โหลด CSV", csv, "filtered_data.csv", "text/csv")
     else:
-        st.warning("❌ ไม่พบข้อมูล")
+        st.warning("❌ ไม่พบข้อมูลตามเงื่อนไข")
 
 else:
     st.info("👋 กรุณาเลือกวิธีนำเข้าข้อมูลด้านบน")
 
 # ==========================================
-# ส่วนที่เพิ่มใหม่: FOOTER (เครดิตผู้จัดทำ)
+# 5. FOOTER (เครดิตผู้จัดทำ)
 # ==========================================
-st.markdown("<br><br>", unsafe_allow_html=True) # เว้นบรรทัด
+st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("---")
-# จัดกึ่งกลาง และใส่สีเทาเพื่อให้ดูเป็น Footer
 st.markdown(
     f"""
     <div style='text-align: center; color: grey;'>
-        <p>Copyright © 2025 <b>งานถ่ายทอดการพยาบาล โรงพยาบาลราชวิถี</b></p>
+        <p>Copyright © 2024 <b>งานถ่ายทอดการพยาบาล โรงพยาบาลราชวิถี</b></p>
         <p>พัฒนาโดย: Nattachai Russmeedara | Powered by Python Streamlit</p>
     </div>
     """, 
