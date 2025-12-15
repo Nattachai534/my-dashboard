@@ -179,7 +179,7 @@ st.markdown("---")
 st.markdown(
     f"""
     <div style='text-align: center; color: grey;'>
-        <p>Copyright © 2024 <b>งานถ่ายทอดการพยาบาล โรงพยาบาลราชวิถี</b></p>
+        <p>Copyright © 2025 <b>งานถ่ายทอดการพยาบาล โรงพยาบาลราชวิถี</b></p>
         <p>พัฒนาโดย: Nattachai Russmeedara | Powered by Python Streamlit</p>
     </div>
     """, 
